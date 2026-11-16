@@ -31,7 +31,7 @@ import (
 
 const (
 	appName = "MacroLoom"
-	version = "0.7.0"
+	version = "0.8.0"
 	port    = 47811
 )
 
