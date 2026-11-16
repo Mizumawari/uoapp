@@ -73,6 +73,13 @@ input[type=number]{width:84px}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:20}
 .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px 34px;text-align:center;max-width:420px}
 .modal h2{margin:0 0 6px;font-size:18px}
+.modal.wide{max-width:640px;width:92vw;text-align:left;max-height:86vh;display:flex;flex-direction:column;padding:22px 24px}
+.plist{overflow:auto;margin:12px -6px;padding:0 6px}
+.plist h4{margin:14px 0 4px;font-size:12px;color:var(--accent);letter-spacing:.06em}
+.pitem{display:flex;gap:10px;align-items:flex-start;padding:6px 8px;border-radius:7px;cursor:pointer}
+.pitem:hover{background:var(--panel2)}
+.pitem input{margin-top:4px}
+.pitem small{display:block;color:var(--dim)}
 .modal .big{font-family:Consolas,monospace;font-size:22px;margin:16px 0;color:var(--accent);min-height:1.5em}
 input[type=color]{width:38px;height:30px;padding:2px;background:var(--panel2);border:1px solid var(--line);border-radius:7px;cursor:pointer}
 .sub{display:flex;align-items:center;gap:8px;padding:0 14px 10px 60px;flex-wrap:wrap}
@@ -132,7 +139,7 @@ function h(tag, attrs, ...kids) {
     else if (v === true) e.setAttribute(k, "");
     else if (v !== false && v != null) e.setAttribute(k, v);
   }
-  for (const c of kids.flat()) if (c != null && c !== false) e.append(c);
+  for (const c of kids.flat(Infinity)) if (c != null && c !== false) e.append(c);
   return e;
 }
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -383,7 +390,75 @@ function render() {
     h("div", {class: "logstat", id: "logstat"}),
     ...p.macros.map(m => macroCard(p, m)),
     h("button", {class: "btn primary", style: "margin-top:16px", onclick: () => {
-      p.macros.push({id: uid(), name: "新しいマクロ", trigger: "", mode: "once", enabled: true, steps: []}); changed(); render(); }}, "＋ マクロ追加"));
+      p.macros.push({id: uid(), name: "新しいマクロ", trigger: "", mode: "once", enabled: true, steps: []}); changed(); render(); }}, "＋ マクロ追加"),
+    h("button", {class: "btn", style: "margin:16px 0 0 8px", onclick: () => presetDialog(p)}, "＋ プリセットから追加"));
+}
+
+// ----- presets -----
+const say = t => [{type: "text", text: t, enter: true}];
+const key = (k, ms) => ms ? [{type: "key", keys: k}, {type: "wait", ms}] : [{type: "key", keys: k}];
+const PRESETS = [
+  ["UO: 発言コマンド（キー設定不要。チャット欄が空の状態で使う）", [
+    ["銀行を開く", "「bank」と発言", "once", say("bank")],
+    ["ガードを呼ぶ", "「guards」と発言", "once", say("guards")],
+    ["ベンダーから買う", "「vendor buy」と発言", "once", say("vendor buy")],
+    ["ベンダーに売る", "「vendor sell」と発言", "once", say("vendor sell")],
+    ["ペットを預ける", "「stable」と発言", "once", say("stable")],
+    ["ペットを引き取る（一覧）", "「claim list」と発言", "once", say("claim list")],
+    ["ペット: ついてこい", "「all follow me」と発言", "once", say("all follow me")],
+    ["ペット: 攻撃", "「all kill」と発言（その後ターゲットを選ぶ）", "once", say("all kill")],
+    ["ペット: 護衛", "「all guard me」と発言", "once", say("all guard me")],
+    ["ペット: 待て", "「all stay」と発言", "once", say("all stay")],
+    ["ペット: 止まれ", "「all stop」と発言", "once", say("all stop")],
+    ["家: ロックダウン", "「i wish to lock this down」と発言", "once", say("i wish to lock this down")],
+    ["家: セキュア", "「i wish to secure this」と発言", "once", say("i wish to secure this")],
+    ["家: 解除", "「i wish to release this」と発言", "once", say("i wish to release this")],
+  ]],
+  ["UO: 初期キー設定を使うもの（UO側のマクロを変えていない場合）", [
+    ["基本ウィンドウをまとめて開く", "バックパック(Alt+I)・ステータス(Alt+S)・ペーパードール(Alt+P)", "once",
+      [...key("Alt+I", 200), ...key("Alt+S", 200), ...key("Alt+P")]],
+    ["戦闘/平和モード切替", "Alt+C を送る。サイドボタンなどに割り当てると便利", "once", key("Alt+C")],
+    ["スキル一覧を開く", "Alt+K を送る", "once", key("Alt+K")],
+    ["ジャーナルを開く", "Alt+J を送る", "once", key("Alt+J")],
+  ]],
+  ["UO: ひな形（追加後に、UO側で割り当てたキーを手順に設定する）", [
+    ["包帯を巻き続ける", "押すたびに開始/停止。UO側の包帯マクロのキー → 約10秒待つ、をくり返す", "toggle",
+      [{type: "key", keys: ""}, {type: "wait", ms: 10000, jitter: 500}]],
+    ["スキルを使い続ける", "押している間、UO側のスキル使用キー → 約1秒待つ、をくり返す", "hold",
+      [{type: "key", keys: ""}, {type: "wait", ms: 1100, jitter: 200}]],
+    ["魔法 → 自分にターゲット", "UO側の詠唱キー → 詠唱待ち → UO側の「自分をターゲット」キー", "once",
+      [{type: "key", keys: ""}, {type: "wait", ms: 1500, jitter: 100}, {type: "key", keys: ""}]],
+    ["ポーションを飲んで武器を持ち直す", "UO側の武装解除キー → ポーションキー → 武装キー", "once",
+      [{type: "key", keys: ""}, {type: "wait", ms: 300}, {type: "key", keys: ""}, {type: "wait", ms: 300}, {type: "key", keys: ""}]],
+  ]],
+  ["汎用（どのゲームでも）", [
+    ["左クリック連打", "押している間、今のカーソル位置を連打", "hold",
+      [{type: "click", button: "left", pos: "cursor", x: 0, y: 0}, {type: "wait", ms: 80, jitter: 40}]],
+    ["キー連打", "押している間、設定したキーを連打（追加後にキーを設定）", "hold",
+      [{type: "key", keys: ""}, {type: "wait", ms: 100, jitter: 40}]],
+    ["キー押しっぱなしの切替", "押すたびに、設定したキーを押し続ける/離す（追加後にキーを設定）", "toggle",
+      [{type: "down", keys: ""}, {type: "wait", ms: 3600000}]],
+  ]],
+];
+function presetDialog(p) {
+  const boxes = [];
+  const list = h("div", {class: "plist"}, PRESETS.map(([group, items]) => [h("h4", {}, group), items.map(it => {
+    const c = h("input", {type: "checkbox"}); boxes.push([c, it]);
+    return h("label", {class: "pitem"}, c, h("span", {}, it[0], h("small", {}, it[1])));
+  })]));
+  const ov = h("div", {class: "overlay"}, h("div", {class: "modal wide"},
+    h("h2", {}, "プリセットから追加"),
+    h("div", {class: "hint"}, "選んだマクロを「" + (p.name || "このプロファイル") + "」に追加します。起動キーは未設定で追加されるので、追加後に割り当ててください。"),
+    list,
+    h("div", {class: "row", style: "justify-content:flex-end"},
+      h("button", {class: "btn", onclick: () => ov.remove()}, "キャンセル"),
+      h("button", {class: "btn primary", onclick: () => {
+        for (const [c, it] of boxes) if (c.checked)
+          p.macros.push({id: uid(), name: it[0], trigger: "", mode: it[2], enabled: true, steps: JSON.parse(JSON.stringify(it[3]))});
+        ov.remove(); changed(); render();
+      }}, "追加"))));
+  ov.addEventListener("click", e => { if (e.target === ov) ov.remove(); });
+  document.body.append(ov);
 }
 
 // ----- status -----
