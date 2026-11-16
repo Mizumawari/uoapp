@@ -31,7 +31,7 @@ import (
 
 const (
 	appName = "MacroLoom"
-	version = "0.8.0"
+	version = "0.9.0"
 	port    = 47811
 )
 
@@ -288,9 +288,21 @@ var (
 	codeNames        = map[uint32]string{}
 )
 
-func countSend(r, _ uintptr, _ error) {
+// lastSendErr is the Win32 error of the most recent failed send (5 = access
+// denied: the target window belongs to a process running as administrator).
+var lastSendErr atomic.Uint32
+
+var elevated = func() bool {
+	r, _, _ := sh32.NewProc("IsUserAnAdmin").Call()
+	return r != 0
+}()
+
+func countSend(r, _ uintptr, err error) {
 	if r == 0 {
 		sendFail.Add(1)
+		if en, ok := err.(syscall.Errno); ok {
+			lastSendErr.Store(uint32(en))
+		}
 	} else {
 		sendOK.Add(1)
 	}
@@ -1213,7 +1225,7 @@ func saveConfig(c *Config) error {
 
 func diagInfo() map[string]any {
 	now := time.Now().UnixMilli()
-	d := map[string]any{"sendOK": sendOK.Load(), "sendFail": sendFail.Load()}
+	d := map[string]any{"sendOK": sendOK.Load(), "sendFail": sendFail.Load(), "sendErr": lastSendErr.Load(), "elevated": elevated}
 	if at := lastKeyAt.Load(); at != 0 {
 		d["key"] = triggerName(lastKey.Load())
 		d["keyAgo"] = now - at
@@ -1272,7 +1284,7 @@ func serve(ln net.Listener) {
 		fmt.Fprint(w, strings.Replace(uiHTML, "__TOKEN__", token, 1))
 	})
 	mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"app": appName, "version": version})
+		writeJSON(w, map[string]any{"app": appName, "version": version, "elevated": elevated})
 	})
 	mux.HandleFunc("GET /api/state", func(w http.ResponseWriter, r *http.Request) {
 		fgMu.Lock()
@@ -1345,6 +1357,20 @@ func serve(ln net.Listener) {
 		eng.start(found, false, false)
 		writeJSON(w, map[string]any{"ok": true})
 	})
+	mux.HandleFunc("POST /api/elevate", func(w http.ResponseWriter, r *http.Request) {
+		exe, err := os.Executable()
+		if err != nil {
+			http.Error(w, "実行ファイルの場所が分かりません", http.StatusInternalServerError)
+			return
+		}
+		// "runas" shows the Windows UAC prompt; the new instance replaces this one
+		rc, _, _ := pShellExecute.Call(0, uintptr(unsafe.Pointer(u16("runas"))), uintptr(unsafe.Pointer(u16(exe))), 0, 0, 1)
+		if rc <= 32 {
+			http.Error(w, "管理者として起動できませんでした（確認画面でキャンセルされた可能性があります）", http.StatusConflict)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	})
 	mux.HandleFunc("POST /api/quit", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": true})
 		go func() { time.Sleep(200 * time.Millisecond); quit() }()
@@ -1365,10 +1391,15 @@ func fatal(msg string) {
 func takeOver() (bool, error) {
 	c := &http.Client{Timeout: 2 * time.Second}
 	if resp, err := c.Get(uiURL() + "api/version"); err == nil {
-		var v struct{ App, Version string }
+		var v struct {
+			App, Version string
+			Elevated     bool
+		}
 		json.NewDecoder(resp.Body).Decode(&v)
 		resp.Body.Close()
-		if resp.StatusCode == 200 && v.App == appName && v.Version == version {
+		// same version: keep the running one, unless we are the administrator
+		// instance replacing a non-administrator one
+		if resp.StatusCode == 200 && v.App == appName && v.Version == version && (v.Elevated || !elevated) {
 			return false, nil
 		}
 	}

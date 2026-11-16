@@ -102,6 +102,9 @@ table.kt td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:t
 .kitbox summary{cursor:pointer;padding:8px 0;font-weight:600}
 .warn{color:var(--warn);font-size:12px;padding:0 14px 8px 60px}
 @media (max-width:720px){.kbody{grid-template-columns:1fr}.kside{border-right:0;border-bottom:1px solid var(--line)}}
+.adminbar{padding:10px 18px;background:var(--bad);color:#fff;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.adminbar[hidden]{display:none}
+.adminbar .btn{background:#fff;color:#222;border-color:#fff;font-weight:600}
 .empty-state{color:var(--dim);padding:40px 0;text-align:center}
 @media (max-width:720px){.wrap{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line)}}
 </style>
@@ -118,6 +121,7 @@ table.kt td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:t
   <button id="quitBtn" class="btn ghost danger" title="MacroLoomを終了">終了</button>
 </header>
 <div id="diag" class="diag"></div>
+<div id="adminbar" class="adminbar" hidden></div>
 <div class="wrap">
   <aside>
     <h3>プロファイル</h3>
@@ -654,7 +658,15 @@ function paintStatus() {
     d.key ? h("span", {class: d.keyHit ? "ok" : ""}, d.keyHit ? "（マクロに一致）" : "（一致するマクロなし）") : "",
     d.key ? " " + ago(d.keyAgo) : "",
     "　｜　最後に起動したマクロ: ", lastFired ? h("b", {}, names[lastFired[0]] || "(削除済み)") : "なし", lastFired ? " " + ago(lastFired[1]) : "",
-    "　｜　キー送信: 成功 " + (d.sendOK || 0) + " / ", h("span", {class: d.sendFail ? "ng" : ""}, "失敗 " + (d.sendFail || 0)));
+    "　｜　キー送信: 成功 " + (d.sendOK || 0) + " / ", h("span", {class: d.sendFail ? "ng" : ""}, "失敗 " + (d.sendFail || 0)),
+    "　｜　権限: " + (d.elevated ? "管理者" : "通常"));
+  const ab = document.getElementById("adminbar"), blocked = !d.elevated && d.sendErr === 5;
+  if (blocked && ab.hidden) {
+    const b = h("button", {class: "btn"}, "管理者として再起動");
+    b.addEventListener("click", async () => { try { await api("POST", "/api/elevate"); setTimeout(() => location.reload(), 2500); } catch (e) { alertMsg(e.message); } });
+    ab.replaceChildren("ゲームが管理者権限で動いているため、キーを送れていません。MacroLoomも管理者として実行する必要があります。", b);
+  }
+  ab.hidden = !blocked;
 }
 async function poll() {
   try {
