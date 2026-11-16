@@ -48,6 +48,8 @@ type Profile struct {
 	LogPath string   `json:"logPath,omitempty"` // game log / journal file to watch
 	// SendMode: "" / "keys" (key presses), "unicode" (unicode text), "post" (messages posted to the window)
 	SendMode string `json:"sendMode,omitempty"`
+	// Kit: id of the UI kit this profile was created from (display only)
+	Kit string `json:"kit,omitempty"`
 }
 
 type logMacro struct {
@@ -82,7 +84,7 @@ func defaultConfig() *Config {
 	return &Config{
 		PauseKey: "Pause",
 		Profiles: []*Profile{{
-			ID: "p-uo", Name: "Ultima Online", Match: "client.exe", Enabled: true,
+			ID: "p-uo", Name: "Ultima Online", Match: "client.exe", Enabled: true, SendMode: "post",
 			Macros: []*Macro{
 				{ID: "m-ex1", Name: "例: bank と発言", Trigger: "F9", Mode: "once", Enabled: false,
 					Steps: []Step{{Type: "text", Text: "bank", Enter: true}}},

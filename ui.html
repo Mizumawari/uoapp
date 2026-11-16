@@ -88,6 +88,20 @@ input[type=color]{width:38px;height:30px;padding:2px;background:var(--panel2);bo
 .step.cond{background:var(--panel2);border-radius:7px;padding:5px 6px;margin:2px -6px}
 .diag{padding:6px 18px;font-size:12px;color:var(--dim);background:var(--panel2);border-bottom:1px solid var(--line)}
 .diag b{color:var(--text)}.diag .ok{color:var(--ok)}.diag .ng{color:var(--bad)}
+.modal.kit{max-width:1040px;width:94vw;text-align:left;max-height:90vh;display:flex;flex-direction:column;padding:22px 24px}
+.kbody{display:grid;grid-template-columns:200px 1fr;gap:16px;min-height:0;flex:1;margin-top:12px}
+.kside{overflow:auto;border-right:1px solid var(--line);padding-right:10px}
+.kside h4,.kdetail h4,.kitbox h4{margin:12px 0 4px;font-size:12px;color:var(--accent);letter-spacing:.04em}
+.kdetail{overflow:auto;padding-right:6px}
+table.kt{border-collapse:collapse;width:100%;font-size:13px}
+table.kt th{text-align:left;font-weight:600;color:var(--dim);font-size:11px;padding:4px 8px;border-bottom:1px solid var(--line)}
+table.kt td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.kc{font-family:Consolas,monospace;background:var(--panel2);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 7px;white-space:nowrap}
+.mono{font-family:Consolas,monospace;font-size:12px}
+.kitbox{background:var(--panel);border:1px solid var(--line);border-radius:11px;margin-top:14px;padding:4px 14px 12px}
+.kitbox summary{cursor:pointer;padding:8px 0;font-weight:600}
+.warn{color:var(--warn);font-size:12px;padding:0 14px 8px 60px}
+@media (max-width:720px){.kbody{grid-template-columns:1fr}.kside{border-right:0;border-bottom:1px solid var(--line)}}
 .empty-state{color:var(--dim);padding:40px 0;text-align:center}
 @media (max-width:720px){.wrap{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line)}}
 </style>
@@ -109,6 +123,7 @@ input[type=color]{width:38px;height:30px;padding:2px;background:var(--panel2);bo
     <h3>プロファイル</h3>
     <div id="profiles"></div>
     <button id="addProf" class="btn" style="margin:10px 8px 0">＋ プロファイル追加</button>
+    <button id="addKit" class="btn primary" style="margin:8px 8px 0">UOキット…</button>
   </aside>
   <main id="main"></main>
 </div>
@@ -354,6 +369,7 @@ function macroCard(p, m) {
         p.macros.splice(p.macros.indexOf(m) + 1, 0, c); changed(); render(); }}, "複製"),
       h("button", {class: "btn ghost danger", title: "マクロを削除", onclick: () => {
         if (confirm("「" + (m.name || "このマクロ") + "」を削除しますか？")) { p.macros.splice(p.macros.indexOf(m), 1); changed(); render(); } }}, "削除")),
+    (c => c.length ? h("div", {class: "warn"}, "⚠ 起動キーが重複: " + c.join("、") + "（同時に有効なときは上にある方が優先されます）") : null)(conflicts(p, m)),
     h("div", {class: "sub"},
       h("span", {class: "hint"}, "ログ起動:"),
       textIn(() => m.logTrigger, v => m.logTrigger = v, {placeholder: p.logPath ? "ログにこの文字が出たら1回実行（空欄=使わない）" : "プロファイルにログファイルを設定すると使えます", style: "flex:1;min-width:220px"})),
@@ -379,7 +395,7 @@ function render() {
       h("label", {class: "f"}, "対象アプリ（exe名またはウィンドウタイトルの一部。空欄ならどこでも有効）",
         h("span", {class: "row"}, textIn(() => p.match, v => p.match = v, {placeholder: "例: client.exe", style: "width:240px"}), pick)),
       h("label", {class: "f"}, "キーの送り方（効かないときに変える）",
-        selIn(() => p.sendMode || "keys", v => p.sendMode = v, [["keys", "キー入力（標準）"], ["post", "ウィンドウへ直接送る"], ["unicode", "Unicode文字入力"]])),
+        selIn(() => p.sendMode || "keys", v => p.sendMode = v, [["keys", "キー入力（標準）"], ["post", "ウィンドウへ直接送る（UO向け。Ctrl/Alt/Shiftの組み合わせは不可）"], ["unicode", "Unicode文字入力"]])),
       h("span", {class: "sp"}),
       h("button", {class: "btn ghost danger", onclick: () => {
         if (confirm("プロファイル「" + (p.name || "") + "」を削除しますか？")) {
@@ -388,11 +404,16 @@ function render() {
       h("label", {class: "f", style: "flex:1"}, "ログファイル（任意）— ゲームが書き出すログやジャーナルのフルパス。新しい行を監視して、ログ起動・ログ待ちに使います",
         textIn(() => p.logPath, v => { p.logPath = v; }, {placeholder: "例: C:\\Users\\名前\\Documents\\uo_journal.txt"}))),
     h("div", {class: "logstat", id: "logstat"}),
+    (() => { const kit = KITS.find(k => k.id === p.kit); if (!kit) return null;
+      const d = h("details", {class: "kitbox"}, h("summary", {}, "キー配置表と UO側の設定（" + kit.name + "）"),
+        kitTables(kit, p.macros.map(m => [m.name, m.trigger, m.mode, m.steps])));
+      return d; })(),
     ...p.macros.map(m => macroCard(p, m)),
     h("button", {class: "btn primary", style: "margin-top:16px", onclick: () => {
       p.macros.push({id: uid(), name: "新しいマクロ", trigger: "", mode: "once", enabled: true, steps: []}); changed(); render(); }}, "＋ マクロ追加"),
     h("button", {class: "btn", style: "margin:16px 0 0 8px", onclick: () => presetDialog(p)}, "＋ プリセットから追加"));
 }
+
 
 // ----- presets -----
 const say = t => [{type: "text", text: t, enter: true}];
@@ -440,6 +461,127 @@ const PRESETS = [
       [{type: "down", keys: ""}, {type: "wait", ms: 3600000}]],
   ]],
 ];
+// ----- kits (per-character macro sets for UO) -----
+const K = k => ({type: "key", keys: k}), W = (ms, jitter) => ({type: "wait", ms, jitter: jitter || 0});
+const ATK = "SelectNearest (Hostile) → AttackSelectedTarget", NEXT = "SelectNext (Hostile) → AttackSelectedTarget";
+const self = s => "CastSpell (" + s + ") → WaitForTarget → TargetSelf", last = s => "CastSpell (" + s + ") → WaitForTarget → LastTarget";
+const KITS = [
+  {id: "warrior", group: "戦う", name: "戦士・弓使い", who: "剣・槌・槍・弓 ＋ 包帯（Healing）で戦うキャラ",
+   uo: [["F1", "BandageSelf", "自分に包帯"], ["F5", ATK, "最寄りの敵を攻撃"], ["F6", NEXT, "次の敵に切り替えて攻撃"],
+        ["F7", "PrimaryAbility", "武器の特殊攻撃1"], ["F8", "SecondaryAbility", "武器の特殊攻撃2"], ["F9", "EquipLastWeapon", "最後の武器を持ち直す"], ["F10", "Arm/Disarm", "武器の着脱"]],
+   macros: [["包帯を巻く", "XButton1", "once", [K("F1")]], ["包帯を巻き続ける（開始/停止）", "Insert", "toggle", [K("F1"), W(10000, 500)]],
+            ["最寄りの敵を攻撃", "XButton2", "once", [K("F5")]], ["次の敵へ", "MButton", "once", [K("F6")]],
+            ["特殊攻撃1", "Home", "once", [K("F7")]], ["特殊攻撃2", "End", "once", [K("F8")]],
+            ["攻撃 → 特殊攻撃1", "Delete", "once", [K("F5"), W(200), K("F7")]],
+            ["武器を持ち直す", "PageUp", "once", [K("F9")]], ["武器の着脱", "PageDown", "once", [K("F10")]]]},
+  {id: "paladin", group: "戦う", name: "聖騎士（戦士＋騎士道）", who: "武器 ＋ 包帯 ＋ 騎士道（Chivalry）のキャラ",
+   uo: [["F1", "BandageSelf", "自分に包帯"], ["F2", self("Close Wounds"), "自分の傷を癒す"], ["F3", self("Cleanse by Fire"), "自分を解毒"], ["F4", self("Remove Curse"), "自分の呪いを解く"],
+        ["F5", ATK, "最寄りの敵を攻撃"], ["F6", NEXT, "次の敵に切り替えて攻撃"], ["F7", "PrimaryAbility", "武器の特殊攻撃1"], ["F8", "SecondaryAbility", "武器の特殊攻撃2"],
+        ["F9", "CastSpell (Enemy of One)", "対単体の火力強化"], ["F11", "CastSpell (Consecrate Weapon)", "武器を聖別"], ["F12", "CastSpell (Divine Fury)", "攻撃速度強化"]],
+   macros: [["包帯を巻く", "XButton1", "once", [K("F1")]], ["包帯を巻き続ける（開始/停止）", "Insert", "toggle", [K("F1"), W(10000, 500)]],
+            ["最寄りの敵を攻撃", "XButton2", "once", [K("F5")]], ["次の敵へ", "MButton", "once", [K("F6")]],
+            ["特殊攻撃1", "Home", "once", [K("F7")]], ["特殊攻撃2", "End", "once", [K("F8")]],
+            ["解毒（Cleanse by Fire）", "Delete", "once", [K("F3")]], ["傷を癒す（Close Wounds）", "PageUp", "once", [K("F2")]],
+            ["戦闘バフ一括（聖別→神の怒り→Enemy of One）", "PageDown", "once", [K("F11"), W(1200, 100), K("F12"), W(1200, 100), K("F9")]],
+            ["呪いを解く（Remove Curse）", "", "once", [K("F4")]]]},
+  {id: "samurai", group: "戦う", name: "侍（戦士＋武士道）", who: "武器 ＋ 包帯 ＋ 武士道（Bushido）のキャラ",
+   uo: [["F1", "BandageSelf", "自分に包帯"], ["F2", "CastSpell (Confidence)", "自己回復の構え"], ["F3", "CastSpell (Evasion)", "回避の構え"], ["F4", "CastSpell (Counter Attack)", "反撃の構え"],
+        ["F5", ATK, "最寄りの敵を攻撃"], ["F6", NEXT, "次の敵に切り替えて攻撃"], ["F7", "PrimaryAbility", "武器の特殊攻撃1"], ["F8", "SecondaryAbility", "武器の特殊攻撃2"],
+        ["F9", "CastSpell (Lightning Strike)", "命中重視の一撃"], ["F10", "CastSpell (Momentum Strike)", "2体目にも当てる"], ["F11", "CastSpell (Honorable Execution)", "とどめの一撃"], ["F12", "InvokeVirtue (Honor)", "名誉（対象を選ぶ）"]],
+   macros: [["包帯を巻く", "XButton1", "once", [K("F1")]], ["包帯を巻き続ける（開始/停止）", "Insert", "toggle", [K("F1"), W(10000, 500)]],
+            ["最寄りの敵を攻撃", "XButton2", "once", [K("F5")]], ["次の敵へ", "MButton", "once", [K("F6")]],
+            ["Lightning Strike", "Home", "once", [K("F9")]], ["特殊攻撃1", "End", "once", [K("F7")]],
+            ["回避（Evasion）", "Delete", "once", [K("F3")]], ["Confidence", "PageUp", "once", [K("F2")]], ["Counter Attack", "PageDown", "once", [K("F4")]],
+            ["Momentum Strike", "", "once", [K("F10")]], ["とどめ（Honorable Execution）", "", "once", [K("F11")]], ["名誉を使う", "", "once", [K("F12")]], ["特殊攻撃2", "", "once", [K("F8")]]]},
+  {id: "mage", group: "魔法", name: "メイジ", who: "魔法（Magery）＋ 瞑想で戦うキャラ",
+   uo: [["F1", self("Greater Heal"), "自分を大回復"], ["F2", self("Cure"), "自分を解毒"], ["F3", self("Heal"), "自分を小回復（詠唱が速い）"], ["F4", self("Invisibility"), "自分を透明化"],
+        ["F5", last("Explosion"), "最後のターゲットに爆発"], ["F6", last("Energy Bolt"), "最後のターゲットにEB"], ["F7", last("Flame Strike"), "最後のターゲットにFS"], ["F8", last("Lightning"), "最後のターゲットに雷"],
+        ["F9", "CastSpell (Teleport)", "テレポート（行き先をクリック）"], ["F10", "CastSpell (Recall)", "リコール（ルーンをクリック）"], ["F11", "UseSkill (Meditation)", "瞑想"], ["F12", "LastSpell", "直前の魔法をもう一度"]],
+   macros: [["大回復", "XButton1", "once", [K("F1")]], ["小回復", "PageUp", "once", [K("F3")]], ["解毒", "Delete", "once", [K("F2")]], ["瞑想", "Insert", "once", [K("F11")]],
+            ["エネルギーボルト", "XButton2", "once", [K("F6")]], ["フレイムストライク", "MButton", "once", [K("F7")]],
+            ["爆発 → エネルギーボルト", "Home", "once", [K("F5"), W(2300, 100), K("F6")]], ["ライトニング", "End", "once", [K("F8")]],
+            ["透明化", "PageDown", "once", [K("F4")]], ["テレポート", "", "once", [K("F9")]], ["リコール", "", "once", [K("F10")]], ["直前の魔法", "", "once", [K("F12")]]],
+   tips: ["攻撃魔法は「最後のターゲット」に飛びます。最初の1発は手動で敵を選んでください。", "コンボの待ち時間（2.3秒）は詠唱速度（FC）に合わせて調整してください。"]},
+  {id: "tamer", group: "魔法", name: "テイマー", who: "ペットを連れて戦うキャラ（Taming / Lore / Vet ＋ 魔法）",
+   uo: [["F1", "CastSpell (Greater Heal)", "大回復（ペットをクリック）"], ["F2", "CastSpell (Arch Cure)", "解毒（ペットをクリック）"], ["F3", "BandageTarget", "包帯（ペットをクリック）"], ["F4", self("Greater Heal"), "自分を大回復"],
+        ["F9", "UseSkill (Animal Lore)", "動物知識"], ["F10", "UseSkill (Animal Taming)", "調教"], ["F11", self("Invisibility"), "自分を透明化"], ["F12", "UseSkill (Meditation)", "瞑想"]],
+   macros: [["ペット: 攻撃（all kill）", "XButton2", "once", say("all kill")], ["ペット: ついてこい", "XButton1", "once", say("all follow me")], ["ペット: 護衛", "MButton", "once", say("all guard me")],
+            ["ペット: 待て", "Home", "once", say("all stay")], ["ペット: 来い", "End", "once", say("all come")],
+            ["ペットに包帯", "Insert", "once", [K("F3")]], ["ペットに大回復", "PageUp", "once", [K("F1")]], ["ペットを解毒", "PageDown", "once", [K("F2")]], ["自分を大回復", "Delete", "once", [K("F4")]],
+            ["動物知識", "", "once", [K("F9")]], ["調教", "", "once", [K("F10")]], ["透明化", "", "once", [K("F11")]], ["瞑想", "", "once", [K("F12")]], ["ペット: 止まれ", "", "once", say("all stop")]],
+   tips: ["ペット命令は発言なので、UO側の設定なしで使えます。", "ペットへの回復・包帯は、キーを押したあとにペットをクリックします。"]},
+  {id: "bard", group: "魔法", name: "バード", who: "沈静・扇動・不調和（Peacemaking / Provocation / Discordance）を使うキャラ",
+   uo: [["F1", "UseSkill (Peacemaking)", "沈静"], ["F2", "UseSkill (Provocation)", "扇動"], ["F3", "UseSkill (Discordance)", "不調和"], ["F4", "TargetSelf", "自分をターゲット"], ["F5", "LastTarget", "最後のターゲット"]],
+   macros: [["範囲沈静（自分中心）", "XButton1", "once", [K("F1"), W(400), K("F4")]], ["扇動（対象を2体クリック）", "XButton2", "once", [K("F2")]], ["不調和（対象をクリック）", "MButton", "once", [K("F3")]],
+            ["沈静（対象をクリック）", "Home", "once", [K("F1")]], ["不調和を同じ相手に", "End", "once", [K("F3"), W(400), K("F5")]]]},
+  {id: "stealth", group: "その他", name: "ステルス・盗賊", who: "隠れる・ステルス・探知・盗み系のキャラ",
+   uo: [["F1", "UseSkill (Hiding)", "隠れる"], ["F2", "UseSkill (Stealth)", "ステルス"], ["F3", "UseSkill (Detect Hidden)", "探知"], ["F4", "UseSkill (Stealing)", "盗む"], ["F5", "UseSkill (Remove Trap)", "罠解除"], ["F6", "UseSkill (Tracking)", "追跡"]],
+   macros: [["隠れる", "XButton1", "once", [K("F1")]], ["ステルス", "XButton2", "once", [K("F2")]], ["探知", "MButton", "once", [K("F3")]],
+            ["隠れる → ステルス", "Insert", "once", [K("F1"), W(10500, 300), K("F2")]], ["盗む", "Home", "once", [K("F4")]], ["追跡", "End", "once", [K("F6")]], ["罠解除", "", "once", [K("F5")]]],
+   tips: ["「隠れる → ステルス」の待ち時間（約10秒）はスキルの再使用待ちです。短くできる場合は調整してください。"]},
+  {id: "gather", group: "その他", name: "採集・生産", who: "採掘・伐採・生産スキルのキャラ",
+   uo: [["F1", "LastObject → WaitForTarget → LastTarget", "同じ道具で同じ場所をもう一度"], ["F2", "LastObject", "最後に使った道具をもう一度使う"], ["F3", "LastTarget", "最後のターゲット"]],
+   macros: [["同じ場所を掘る/切る（1回）", "XButton2", "once", [K("F1")]], ["押している間くり返し掘る/切る", "XButton1", "hold", [K("F1"), W(1500, 300)]],
+            ["道具をもう一度使う", "MButton", "once", [K("F2")]],
+            ["押している間「前回と同じ物を作る」をクリック", "Insert", "hold", [{type: "click", button: "left", pos: "window", x: 0, y: 0}, W(2000, 300)]]],
+   tips: ["最初の1回は手動で道具を使い、場所をクリックしてください。以降はそれをくり返します。", "くり返しは「押している間だけ」動く作りにしてあります。席を離れての放置には使わないでください。", "生産は、手順のマウスの「位置を取得」で、生産メニューの「前回と同じ物を作る」ボタンの位置を取り込んでください。"]},
+];
+const COMMON = [["銀行を開く", say("bank")], ["ガードを呼ぶ", say("guards")], ["ベンダーから買う", say("vendor buy")], ["ベンダーに売る", say("vendor sell")], ["ペットを預ける", say("stable")], ["ペットを引き取る（一覧）", say("claim list")]];
+const TRIG_LABEL = {XButton1: "マウス サイド手前", XButton2: "マウス サイド奥", MButton: "マウス 中ボタン"};
+const MODE_LABEL = {once: "", hold: "（押している間）", toggle: "（開始/停止）"};
+function kitTables(kit, macros) {
+  return [
+    h("h4", {}, "① UO側で登録するマクロ（オプション → マクロ。Ctrl / Alt / Shift のチェックは外す）"),
+    kit.uo.length ? h("table", {class: "kt"}, h("tr", {}, h("th", {}, "キー"), h("th", {}, "登録する動作"), h("th", {}, "内容")),
+      kit.uo.map(([k, a, d]) => h("tr", {}, h("td", {}, h("span", {class: "kc"}, k)), h("td", {class: "mono"}, a), h("td", {}, d)))) : h("div", {class: "hint"}, "UO側の設定は不要です。"),
+    h("h4", {}, "② MacroLoomで押すキー"),
+    h("table", {class: "kt"}, h("tr", {}, h("th", {}, "押すキー"), h("th", {}, "動作"), h("th", {}, "UOへ送る内容")),
+      macros.map(([n, t, mode, steps]) => h("tr", {}, h("td", {}, t ? h("span", {class: "kc"}, TRIG_LABEL[t] || t) : h("span", {class: "hint"}, "未割り当て")), h("td", {}, n + (MODE_LABEL[mode] || "")),
+        h("td", {class: "hint"}, steps.map(s => s.type === "key" ? s.keys : s.type === "text" ? "「" + s.text + "」と発言" : s.type === "wait" ? "待つ" : s.type === "click" ? "クリック" : "").filter(Boolean).join(" → "))))),
+    (kit.tips || []).length ? h("ul", {class: "hint", style: "margin:10px 0 0;padding-left:18px"}, kit.tips.map(t => h("li", {}, t))) : null];
+}
+const flatKids = a => a.flat(Infinity).filter(Boolean);
+function kitDialog() {
+  let cur = KITS[0];
+  const side = h("div", {class: "kside"}), detail = h("div", {class: "kdetail"});
+  const name = h("input", {type: "text", placeholder: "例: PARUTENON（空欄なら全キャラ共通）", style: "width:100%"});
+  const common = h("input", {type: "checkbox"}); common.checked = true;
+  // prefill the character name from the current UO window title: "Ultima Online - NAME (Shard)"
+  const m = /^Ultima Online - (.+?) \(/.exec(st.title || ""); if (m) name.value = m[1];
+  function paint() {
+    const groups = [...new Set(KITS.map(k => k.group))];
+    side.replaceChildren(...flatKids(groups.map(g => [h("h4", {}, g), KITS.filter(k => k.group === g).map(k =>
+      h("div", {class: "prof" + (k === cur ? " sel" : ""), onclick: () => { cur = k; paint(); }}, h("span", {class: "nm"}, k.name)))])));
+    detail.replaceChildren(...flatKids([h("h3", {style: "margin:0"}, cur.name), h("div", {class: "hint"}, cur.who), kitTables(cur, cur.macros)]));
+  }
+  const ov = h("div", {class: "overlay"}, h("div", {class: "modal kit"},
+    h("h2", {}, "UOキャラ別キットから作成"),
+    h("div", {class: "hint"}, "キャラのタイプを選ぶと、キー配置済みのプロファイルを作ります。どのキットも配置の考え方は同じです：サイド手前＝回復・守り、サイド奥＝主な攻撃・行動、中ボタン＝切り替え、Insert＝くり返し、Delete＝緊急、F1〜F4＝回復、F5〜F8＝攻撃、F9〜F12＝補助。"),
+    h("div", {class: "kbody"}, side, detail),
+    h("div", {class: "row", style: "margin-top:12px"},
+      h("label", {class: "f", style: "flex:1;min-width:220px"}, "キャラクター名（ウィンドウタイトルに出る名前。入れるとそのキャラのときだけ有効になり、キャラごとに自動で切り替わります）", name),
+      h("label", {class: "chk"}, common, "共通の発言コマンドも入れる"),
+      h("button", {class: "btn", onclick: () => ov.remove()}, "キャンセル"),
+      h("button", {class: "btn primary", onclick: () => {
+        const ch = name.value.trim();
+        const p = {id: uid(), name: "UO: " + cur.name + (ch ? " — " + ch : ""), match: ch || "client.exe", enabled: true, sendMode: "post", kit: cur.id,
+          macros: cur.macros.map(([n, t, mode, steps]) => ({id: uid(), name: n, trigger: t, mode, enabled: true, steps: JSON.parse(JSON.stringify(steps))}))};
+        if (common.checked) for (const [n, steps] of COMMON) p.macros.push({id: uid(), name: n, trigger: "", mode: "once", enabled: true, steps: JSON.parse(JSON.stringify(steps))});
+        // a kit without a character name applies to every character: switch other such kits off
+        if (!ch) for (const o of cfg.profiles) if (o.kit && o.match === "client.exe") o.enabled = false;
+        cfg.profiles.push(p); sel = p.id; ov.remove(); changed(); render();
+      }}, "このキットでプロファイルを作成"))));
+  ov.addEventListener("click", e => { if (e.target === ov) ov.remove(); });
+  paint(); document.body.append(ov);
+}
+function conflicts(p, m) {
+  if (!m.trigger || !m.enabled || !p.enabled) return [];
+  const out = [];
+  for (const o of cfg.profiles) if (o.enabled) for (const x of o.macros)
+    if (x !== m && x.enabled && x.trigger === m.trigger) out.push(o === p ? x.name : o.name + " / " + x.name);
+  return out;
+}
+
 function presetDialog(p) {
   const boxes = [];
   const list = h("div", {class: "plist"}, PRESETS.map(([group, items]) => [h("h4", {}, group), items.map(it => {
@@ -501,6 +643,7 @@ document.getElementById("quitBtn").addEventListener("click", async () => {
   if (!confirm("MacroLoom を終了しますか？（マクロは動かなくなります）")) return;
   await api("POST", "/api/quit"); document.body.replaceChildren(h("div", {class: "empty-state"}, "終了しました。このタブは閉じてかまいません。"));
 });
+document.getElementById("addKit").addEventListener("click", kitDialog);
 document.getElementById("addProf").addEventListener("click", () => {
   const p = {id: uid(), name: "新しいプロファイル", match: "", enabled: true, macros: []};
   cfg.profiles.push(p); sel = p.id; changed(); render();
